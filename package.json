@@ -1,0 +1,29 @@
+{
+  "name": "flatback",
+  "version": "1.0.0",
+  "description": "flatten callback control flow with generator functions",
+  "main": "index.js",
+  "devDependencies": {
+    "mocha": "^2.5.3"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": "reltubttam/flatback",
+  "keywords": [
+    "async",
+    "control",
+    "flow",
+    "callback",
+    "generator",
+    "coroutine"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/reltubttam/flatback/issues"
+  },
+  "homepage": "https://github.com/reltubttam/flatback#readme",
+  "engines": {
+    "node": ">= 4.0.0"
+  }
+}
