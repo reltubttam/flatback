@@ -1,10 +1,9 @@
 # flatback
 
 Flatten control flow of callback based async functions using generator functions.  The aims for this module are the following:
-- Maintain the distinction between errors passed to callbacks and thrown exceptions.  Try catch should work as much as possible.
-- Concurrent execution should be intuitive and not require special data structure or dedicated library functions.
+- Maintain the distinction between errors passed to callbacks and thrown exceptions.
+- Concurrent execution should be intuitive and not require special data structure or dedicated library functions.  Promise.all([P1, P2 ... Pn]) i'm looking at you.
 - Arguments should be passable into the generator function so integration with other libraries is easy.
-- As few assumptions should be made about usage as possible, callback conventions should be supported but not enforced.
 
 ## Installation
 
@@ -55,9 +54,12 @@ const flatback = require('flatback');
 const request = require('request');
 
 flatback.exec(function* () {
-  [[error1, response1, body1], [error2, response2, body2]] = yield (callback1, callback2) => {
+  const [
+    [error1, response1, body1], 
+    [error2, response2, body2]
+  ] = yield (callback1, callback2) => {
     request('http://somewhere/resource', callback1);
-    request('http://somewhere/differentResource', callback2);
+    request('http://somewhere/different-resource', callback2);
   }
   if (error1 || error2){
     // handle errors
@@ -75,14 +77,14 @@ const flatback = require('flatback');
 const request = require('request');
 
 flatback.exec(function* () {
-  [error, response, body] = yield (callback) => {
+  const [error, response, body] = yield (callback) => {
     request('http://somewhere/resource', (error, response, body) => {
       if (!error){
         callback(null, response, body);
       } // else do something with error
     });
     
-    request('http://somewhereElse/mirrorResource', (error, response, body) => {
+    request('http://somewhere-else/mirror-resource', (error, response, body) => {
       if (!error){
         callback(null, response, body);
       } // else do something with error
@@ -109,11 +111,10 @@ const flatback = require('flatback');
 const object = {}
 flatback.exec(function* () {
   try {
-    [error, result] = yield (callback) => {
+    const [error, result] = yield (callback) => {
       object.missing.stuff; // throws an Error
       callback('foo', 'bar');
     }
-    
     // never get to this part of the code
   } catch (err){
     // err.message: 'Cannot read property 'stuff' of undefined'
@@ -130,11 +131,9 @@ Returns a function that will execute the control flow described by the generator
 ```js
 const myAsyncFunction = flatback.func(function* (description){
   // description == 'foo'
-  
   const [err, result] = yield callback => {
     otherAsyncFunction(description, callback);
   }
-  
   if (err){
     // handle error
     return;
@@ -151,11 +150,9 @@ Immediately executes the control flow described by the generator function.  No a
 
 ```js
 flatback.exec(function* (){
-
   const [err, result] = yield callback => {
     otherAsyncFunction(description, callback);
   }
-  
   if (err){
     // handle error
     return;
@@ -172,11 +169,9 @@ The yield will return an array containing the arguments passed to the supplied f
 
 ```js
 flatback.exec(function* (){
-
   const [arg1, arg2] = yield callback => {
     callback('foo', 'bar');
   }
-  
   // arg1 == 'foo', arg2 == 'bar'
 });
 ```
@@ -191,14 +186,15 @@ If there no arguments to the function, control returns to the generator immediat
 
 ```js
 flatback.exec(function* (){
-
-  const [[arg1, arg2], [arg3, arg4]] = yield (callback1, callback2) => {
+  const [
+    [arg1, arg2], 
+    [arg3, arg4]
+  ] = yield (callback1, callback2) => {
     callback1('foo', 'bar');
     callback1('not foo', 'not bar'); // second call ignored
     
     callback2('baz', 'qux');
   }
-  
   // arg1 == 'foo', arg2 == 'bar', arg3 == 'baz', arg4 == 'qux'
 });
 ```
@@ -210,9 +206,7 @@ This is a shorthand for `yield (callback) => setTimeout(() => callback(),0)`.  I
 ```js
 flatback.exec(function* (){
   // do something computationally expensive
-  
   yield;
-  
   // do something else computationally expensive
 });
 ```
