@@ -64,6 +64,34 @@ describe('flatback.exec', () => {
   });
 });
 
+describe('flatback.once', () => {
+  it('works with single callback', (done) => {
+    flatback.once(callback => {
+      callback('err', 'success');
+    }, (err, result) => {
+      
+      assert.equal(err, 'err', 'err should be err');
+      assert.equal(result, 'success', 'result1 should be success');
+      done();
+    });
+  });
+  
+  it('ignore all but first call to each callback', (done) => {
+    flatback.once((callback1, callback2) => {
+      callback1('err1', 'success1');
+      callback1('ignored err', 'ignored success');
+      callback2('err2', 'success2');
+    }, ([err1, result1], [err2, result2]) => {
+      
+      assert.equal(err1, 'err1', 'err1 should be err1');
+      assert.equal(result1, 'success1', 'result1 should be success1');
+      assert.equal(err2, 'err2', 'err2 should be err2');
+      assert.equal(result2, 'success2', 'result2 should be success2');
+      done();
+    });
+  });
+});
+
 describe('yielded functions', () => {
   it('ignore all but first call to each callback', flatback.func(function* (done){
     const [
