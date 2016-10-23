@@ -26,10 +26,32 @@ function exec(genFunction){
 }
 
 /**
+ * immediately execute the supplied function as if it were yielded within a flatback.exec call.
+ * arguments passed to the callback match those that would have been yielded
+ * @param {function} flatBackFunction - function to collect all arguments passed to callbacks from
+ * @param {function} callback - function to collect all arguments passed to callbacks from
+ * @returns {undefined}
+ */
+function once(flatBackFunction, callback){
+  getNextResult(flatBackFunction, function (err, results){
+    if (err){
+      throw err
+    } 
+    if (flatBackFunction.length == 1){  // f(callback) => foo, bar, ...
+        return callback.apply(null, results[1]);
+    } else {  // f(callback1, callback2, ...) => [foo1, bar1, ...], [foo2, bar2, ...], ...
+      return callback.apply(null, results.slice(1));
+    }
+  });
+  return;
+}
+
+/**
  * call next on generator and decide how to handle the result.
  * @param {generator} gen - contains control flow
- * @param {error} err - exception caught in previous function to throw in to generator (if present) 
+ * @param {error} err - js exception caught from previous step to throw in to generator
  * @param {array} result - result from previous iteration to pass in to generator (if no err)
+ * @returns {undefined}
  */
 function step(gen, err, result){
   let next;
@@ -44,8 +66,9 @@ function step(gen, err, result){
     return;
   } else if (classString == 'Undefined'){
     setTimeout(() => step(gen, null, []), 0);
+    return;
   } else if (classString != 'Function'){
-    step(gen, new TypeError(`You may only yield a function or undefined to flatback.  Recieved ${classString}: ${String(next.value)}`));
+    return step(gen, new TypeError(`You may only yield a function or undefined to flatback.  Recieved ${classString}: ${String(next.value)}`));
   } else if (!next.value.length){
     try {
       next.value();
@@ -54,19 +77,27 @@ function step(gen, err, result){
     }
     return step(gen, null, []);
   } else {
-    return getNextResult(gen, next.value);
+    return getNextResult(next.value, (err, results) => {
+      if (err){
+        return step(gen, err);
+      } else if (next.value.length == 1){ // f(callback) => [foo, bar, ...]
+        return step(gen, null, results[1]);
+      } else {  // f(callback1, callback2, ...) => [[foo1, bar1, ...], [foo2, bar2, ...], ...]
+        return step(gen, null, results.slice(1));
+      }
+    });
   }
 }
 
 /**
  * execute given function with one or more callbacks.  
- * After function completes and all callbacks are called, control is passed back to step.
- * if one callback argument is used, results passed to step are the argument passed.  if multiple, results are an array of these.
- * @param {generator} gen - contains control flow
- * @param {function} valueFunction - function to collect all arguments passed to callbacks from
+ * After function completes and all it's callbacks are called, control is passed back to the main callback.
+ * @param {function} flatBackFunction - function to collect all arguments passed to callbacks from
+ * @param {function} callback - function to pass all results to or an exception if thrown
+ * @returns {undefined}
  */
- function getNextResult(gen, valueFunction){
-  let waitingCount = valueFunction.length + 1;
+ function getNextResult(flatBackFunction, callback){
+  let waitingCount = flatBackFunction.length + 1;
   const waitingFlags = new Array(waitingCount).fill(true);
   const results = new Array(waitingCount);
   const finishedChecks = new Array(waitingCount)
@@ -78,11 +109,7 @@ function step(gen, err, result){
           results[index] = Array.from(arguments);
           waitingCount --;
           if (!waitingCount){
-            if (valueFunction.length == 1){
-              return step(gen, null, results[1]);
-            } else {
-              return step(gen, null, results.slice(1));
-            }
+            callback(null, results);
           }
         }
       }
@@ -90,9 +117,10 @@ function step(gen, err, result){
     
   let returned;
   try {
-    returned = valueFunction.apply(null, finishedChecks.slice(1));
+    returned = flatBackFunction.apply(null, finishedChecks.slice(1));
   } catch(err){
-    return step(gen, err);
+    callback(err);
+    return;
   }
   return finishedChecks[0](returned);
 }
@@ -100,4 +128,5 @@ function step(gen, err, result){
 module.exports = {
     func: func,
     exec: exec,
+    once: once,
 };

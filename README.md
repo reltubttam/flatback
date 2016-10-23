@@ -2,8 +2,13 @@
 
 Flatten control flow of callback based async functions using generator functions.  The aims for this module are the following:
 - Maintain the distinction between errors passed to callbacks and thrown exceptions.
-- Concurrent execution should be intuitive and not require special data structure or dedicated library functions.  Promise.all([P1, P2 ... Pn]) i'm looking at you.
+- Concurrent execution should be intuitive and not require special data structure or dedicated library functions.  `Promise.all([P1, P2, ..., Pn])` i'm looking at you.
 - Arguments should be passable into the generator function so integration with other libraries is easy.
+
+This is achieved by yielding functions within the generator function, each function takes a number of callbacks as arguments and data passed to these is yielded back to the generator.  Flatback determines the number of callbacks to expect by checking the length property on the function.  To make concurrent execution simple and composable, the following rules govern these callbacks:
+- execution only returns to the generator when all callbacks have been called.  This means the time taken will be as slow as the slowest task if a different callback is used for each.
+- each callback can only be called once, later calls are ignored.  This means the time taken will be as slow as the fastest task if one callback is shared by tasks, however data passed back from later calls is lost.
+- a try catch block can be placed around a yielded function and will trap any synchronous errors occurring there.
 
 ## Installation
 
@@ -18,7 +23,6 @@ $ npm install flatback
 flatback.func returns a function that can be used directly in a number of places.
 
 Each yielded function within the generator will be executed immediately, and after it has finished and all it's arguments have been called, control will resume back in the generator.
-
 ```js
 const flatback = require('flatback');
 const fs = require('fs');
@@ -134,13 +138,8 @@ const myAsyncFunction = flatback.func(function* (description){
   const [err, result] = yield callback => {
     otherAsyncFunction(description, callback);
   }
-  if (err){
-    // handle error
-    return;
-  }
-  // handle result
+  // handle err & result
 });
-
 myAsyncFunction('foo')
 ```
 
@@ -150,14 +149,35 @@ Immediately executes the control flow described by the generator function.  No a
 
 ```js
 flatback.exec(function* (){
+  const description == 'foo'
   const [err, result] = yield callback => {
     otherAsyncFunction(description, callback);
   }
-  if (err){
-    // handle error
-    return;
+  // handle err & result
+});
+```
+
+### flatback.once(function, callback)
+
+If only one yield statement is needed, this function can be used to remove the need for a generator function entirely.  The first argument is the function that would have been yielded and the result is passed directly to the arguments of the callback.
+
+```js
+flatback.once(callback => {
+    callback('foo', 'bar');
+  },
+  (arg1, arg2) => {
+    // arg1 == 'foo', arg2 == 'bar'
   }
-  // handle result
+});
+
+flatback.once((callback1, callback2) => {
+    callback1('foo', 'bar');
+    callback1('not foo', 'not bar'); // second call ignored
+    callback2('baz', 'qux');
+  },
+  ([arg1, arg2], [arg3, arg4]) => {
+  // arg1 == 'foo', arg2 == 'bar', arg3 == 'baz', arg4 == 'qux'
+  }
 });
 ```
 
@@ -192,7 +212,6 @@ flatback.exec(function* (){
   ] = yield (callback1, callback2) => {
     callback1('foo', 'bar');
     callback1('not foo', 'not bar'); // second call ignored
-    
     callback2('baz', 'qux');
   }
   // arg1 == 'foo', arg2 == 'bar', arg3 == 'baz', arg4 == 'qux'
@@ -205,9 +224,9 @@ This is a shorthand for `yield (callback) => setTimeout(() => callback(),0)`.  I
 
 ```js
 flatback.exec(function* (){
-  // do something computationally expensive
+  // do something that blocks the event loop
   yield;
-  // do something else computationally expensive
+  // do something else that blocks the event loop
 });
 ```
 
