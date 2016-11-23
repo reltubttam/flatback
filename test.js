@@ -14,7 +14,7 @@ describe('flatback.func', () => {
         events.push('in yielded function');
         callback('err1', 'success1');
         events.push('after callback');
-      }
+      };
       events.push('after yielded function');
       assert.equal(err1, 'err1', 'err1 should be err1');
       assert.equal(result1, 'success1', 'result1 should be success1');
@@ -22,7 +22,7 @@ describe('flatback.func', () => {
       
       const [err2, result2] = yield callback2 => {
         setTimeout(() => callback2('err2', 'success2'), 0);
-      }
+      };
       assert.equal(err2, 'err2', 'err2 should be err2');
       assert.equal(result2, 'success2', 'result2 should be success2');
       done();
@@ -48,7 +48,7 @@ describe('flatback.exec', () => {
         events.push('in yielded function');
         callback('err1', 'success1');
         events.push('after callback');
-      }
+      };
       events.push('after yielded function');
       assert.equal(err1, 'err1', 'err1 should be err1');
       assert.equal(result1, 'success1', 'result1 should be success1');
@@ -56,7 +56,7 @@ describe('flatback.exec', () => {
       
       const [err2, result2] = yield callback2 => {
         setTimeout(() => callback2('err2', 'success2'), 0);
-      }
+      };
       assert.equal(err2, 'err2', 'err2 should be err2');
       assert.equal(result2, 'success2', 'result2 should be success2');
       done();
@@ -69,7 +69,6 @@ describe('flatback.once', () => {
     flatback.once(callback => {
       callback('err', 'success');
     }, (err, result) => {
-      
       assert.equal(err, 'err', 'err should be err');
       assert.equal(result, 'success', 'result1 should be success');
       done();
@@ -101,7 +100,53 @@ describe('yielded functions', () => {
       callback1('err1', 'success1');
       callback1('ignored err', 'ignored success');
       callback2('err2', 'success2');
-    }
+    };
+    assert.equal(err1, 'err1', 'err1 should be err1');
+    assert.equal(result1, 'success1', 'result1 should be success1');
+    assert.equal(err2, 'err2', 'err2 should be err2');
+    assert.equal(result2, 'success2', 'result2 should be success2');
+    done();
+  }));
+  
+  it('can be undefined', flatback.func(function* (done){ 
+    // TODO check setTimeout occurs
+    const result = yield;
+    assert.equal(Array.isArray(result), true);
+    assert.equal(result.length, 0);
+    done();
+  }));
+    
+  it('can be an empty array', flatback.func(function* (done){ 
+    // TODO check setTimeout occurs
+    const result = yield [];
+    assert.equal(Array.isArray(result), true);
+    assert.equal(result.length, 0);
+    done();
+  }));
+  
+  it('can be in arrays, one callback two functions', flatback.func(function* (done){
+    const [
+      [err1, result1],
+      [err2, result2]
+    ] = yield [
+      callback => callback('err1', 'success1'),
+      callback => callback('err2', 'success2')
+    ];
+    assert.equal(err1, 'err1', 'err1 should be err1');
+    assert.equal(result1, 'success1', 'result1 should be success1');
+    assert.equal(err2, 'err2', 'err2 should be err2');
+    assert.equal(result2, 'success2', 'result2 should be success2');
+    done();
+  }));
+  
+  it('can be in arrays, two callbacks one function', flatback.func(function* (done){
+    const [[
+      [err1, result1], 
+      [err2, result2]
+    ]] = yield [(callback1, callback2) => {
+      callback1('err1', 'success1');
+      callback2('err2', 'success2');
+    }];
     assert.equal(err1, 'err1', 'err1 should be err1');
     assert.equal(result1, 'success1', 'result1 should be success1');
     assert.equal(err2, 'err2', 'err2 should be err2');
@@ -126,7 +171,7 @@ describe('parallel usage', function () {
           events.push(`${name} sync callback sending`);
           innerCallback('result2');
           events.push(`${name} sync callback sent`);
-        }
+        };
         
         events.push(`${name} outer callback sending`);
         outerCallback(ffResult1, ffResult2);
@@ -134,13 +179,10 @@ describe('parallel usage', function () {
       });
     }
     
-    const [
-      [err1, result1], 
-      [err2, result2]
-    ] = yield (callback1, callback2) => {
+    yield (callback1, callback2) => {
       makeFlatbackFunction('first', 50)(callback1);
       makeFlatbackFunction('second', 100)(callback2);
-    }
+    };
     events.push('empty yield sending');
     yield;
     events.push('empty yield sent');
@@ -188,14 +230,25 @@ describe('errors', function () {
       flatback.func(function* (callback){
         yield s => s();
         assert.fail('something', 'broke', 'oops3');
-      })      
+      }),
+      [(callback) => {
+        assert.fail('something', 'broke', 'oops4');
+      }],
+      [
+        [],
+        (callback) => {
+          assert.fail('something', 'broke', 'oops5');
+        },(callback) => {
+          assert.fail('something', 'broke', 'not oops5');
+        }
+      ]
     ];
     const errors = [];
     for (const badYield of badYields){
       try {
         result = yield badYield;
       } catch(err){
-        errors.push({message: err.message, name: err.name });
+        errors.push(err);
       }
     }
     assert(badYields.length = errors.length);
@@ -223,6 +276,12 @@ describe('errors', function () {
         name: 'AssertionError'
       }, {
         messageSubStr: 'oops3',
+        name: 'AssertionError'
+      }, {
+        messageSubStr: 'oops4',
+        name: 'AssertionError'
+      }, {
+        messageSubStr: 'oops5',
         name: 'AssertionError'
       }
     ].forEach((expected, index) => {
