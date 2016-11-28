@@ -12,17 +12,21 @@
   "repository": "reltubttam/flatback",
   "keywords": [
     "async",
+    "await",
+    "yield",
     "control",
     "flow",
     "callback",
     "generator",
-    "coroutine"
+    "coroutine",
+    "parallel",
+    "concurrent"
   ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/reltubttam/flatback/issues"
   },
-  "homepage": "https://github.com/reltubttam/flatback#readme",
+  "homepage": "https://github.com/reltubttam/flatback",
   "engines": {
     "node": ">= 4.0.0"
   }
