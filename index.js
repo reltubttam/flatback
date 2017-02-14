@@ -26,17 +26,57 @@ function exec(genFunction){
 /**
  * immediately execute the supplied function as if it were yielded within a flatback.exec call
  * arguments passed to the callback match those that would have been yielded.
- * @param {(Function|Function[]|undefined)} value - valid expression to yield
- * @param {Function} callback - function to collect the result of evaluating the value
+ * @param {(Function|Promise|undefined|(Function|Promise|undefined)[])} value - valid expression to yield
+ * @param {Function} resolvedCallback - function to collect the result of evaluating the value succesfully
+ * @param {Function} [rejectedCallback] - optional function to collect exceptions from functions or catch from promises
  * @returns {undefined}
  */
-function once(value, callback){
+function once(value, resolvedCallback, rejectedCallback){
   getNextResult(value, (err, result) => {
     if (err){
-      throw err;
+      if (!rejectedCallback){
+        throw err;
+      }
+      return rejectedCallback(err);
     }
-    callback.apply(null, result);
+    return resolvedCallback.apply(null, result);
   });
+}
+
+/**
+ * return an async function from the supplied generator function
+ * this function will return a promise that resolves to the value returned by the supplied generator function.
+ * uses own version of step function with a reference to the enclosing promise.
+ * @param {GeneratorFunction} genFunction - describes control flow
+ * @returns {Function} - executable function that always returns a promise
+ */
+function async(genFunction){
+  function execAsync(){
+    const gen = genFunction.apply(null, Array.from(arguments));
+    
+    return new Promise((resolve, reject) => {
+      function stepAsync(gen, err, result){
+        let next;
+        try {
+          if (err){
+            next = gen.throw(err);
+          } else {
+            next = gen.next(result);
+          }
+        } catch(err){
+          return reject(err);
+        }
+        if (!next.done){
+          return getNextResult(next.value, (err, result) => stepAsync(gen, err, result));
+        } else {
+          return resolve(next.value);
+        }
+      }
+      
+      stepAsync(gen);
+    });
+  }
+  return Object.defineProperty(execAsync, "length", {value: genFunction.length});
 }
 
 /**
@@ -62,7 +102,7 @@ function step(gen, err, result){
 /**
  * decide how to handle yielded value, evaluating trivial cases more efficiently and creating errors for unsupported types
  * arrays and functions may be passed to handleArray or handleFunction.
- * @param {(Function|Function[]|undefined)} value - yielded expression
+ * @param {(Function|Promise|undefined|(Function|Promise|undefined)[])} value - yielded expression
  * @param {Function} callback - function to collect the result of value (err is only ever synchronous exceptions)
  * @returns {undefined}
  */
@@ -89,9 +129,19 @@ function getNextResult(value, callback){
     } else {
       return handleFunction(value, callback);
     }
-
+ 
+  } else if (classString == 'Promise'){
+    value.then( // resolve & return control to generator, callback not called inside a promise
+      result => setTimeout(() => {
+        callback(null, result);
+      }, 0),
+      err => setTimeout(() => {
+        callback(err);
+      }, 0)
+    )
+    
   } else {
-    return callback(new TypeError(`You may only yield a function, undefined or an array of these to flatback.  Recieved ${classString}: ${String(value)}`));
+    return callback(new TypeError(`You may only yield a function, promise, undefined or an array of these to flatback.  Recieved ${classString}: ${String(value)}`));
   }
 }
 
@@ -108,11 +158,12 @@ function getNextResult(value, callback){
   const results = new Array(waitingCount);
   let firstErr = null;
   valueArray.forEach((value, index)=> {
-    if (!firstErr){
+    if (!firstErr){// if error occurs synchronously, cease execution
       getNextResult(value, (err, result) => {
-        if (err) { // this can only happen synchronously
+        if (!firstErr && err) {
           firstErr = err;
-        } else {
+          return callback(firstErr);
+        } else if (!firstErr){
           results[index] = result;
           waitingCount --;
           if (!waitingCount){ // if all elements have completed, callback the results
@@ -122,9 +173,6 @@ function getNextResult(value, callback){
       });
     }
   });
-  if (firstErr){
-    callback(firstErr);
-  }
 }
 
 /**
@@ -177,4 +225,5 @@ module.exports = {
     func: func,
     exec: exec,
     once: once,
+    async: async,
 };

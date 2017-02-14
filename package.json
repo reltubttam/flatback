@@ -20,7 +20,8 @@
     "generator",
     "coroutine",
     "parallel",
-    "concurrent"
+    "concurrent",
+    "promise"
   ],
   "license": "MIT",
   "bugs": {
